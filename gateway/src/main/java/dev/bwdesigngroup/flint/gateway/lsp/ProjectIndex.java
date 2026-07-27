@@ -82,17 +82,35 @@ public class ProjectIndex {
 
     /** Top-level module segments (e.g. "myPkg") for bare completion. */
     public List<String> rootPackages(String project) {
-        List<String> roots = new ArrayList<>();
+        return childPackages(project, "");
+    }
+
+    /**
+     * Immediate child segments of a dotted package prefix, for completing an intermediate package
+     * hop ({@code myPkg.<here>}). Given modules {@code myPkg.myMod} and {@code myPkg.sub.deep}, the
+     * prefix {@code myPkg} yields {@code [myMod, sub]} — only the next segment, de-duplicated. The
+     * prefix must land on a dot boundary, so {@code myP} matches nothing. An empty prefix yields
+     * the top-level roots.
+     */
+    public List<String> childPackages(String project, String packagePrefix) {
+        String prefix = packagePrefix == null ? "" : packagePrefix;
+        String qualifier = prefix.isEmpty() ? "" : prefix + ".";
+        List<String> children = new ArrayList<>();
         for (String modulePath : modules(project).keySet()) {
-            String root =
-                    modulePath.contains(".")
-                            ? modulePath.substring(0, modulePath.indexOf('.'))
-                            : modulePath;
-            if (!roots.contains(root)) {
-                roots.add(root);
+            if (!modulePath.startsWith(qualifier)) {
+                continue;
+            }
+            String rest = modulePath.substring(qualifier.length());
+            if (rest.isEmpty()) {
+                continue;
+            }
+            int dot = rest.indexOf('.');
+            String child = dot >= 0 ? rest.substring(0, dot) : rest;
+            if (!children.contains(child)) {
+                children.add(child);
             }
         }
-        return roots;
+        return children;
     }
 
     private Map<String, Module> build(String project) {

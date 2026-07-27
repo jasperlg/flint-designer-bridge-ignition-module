@@ -109,6 +109,16 @@ public class CompletionEngine {
                         }
                     }
                 }
+                // ...and the child packages/modules under base, so intermediate package hops
+                // (myPkg. -> myMod) expand. A name can be both a module and a package, so this
+                // runs whether or not the exact module lookup hit.
+                for (String child : projectIndex.childPackages(project, base)) {
+                    if (startsWith(child, partial)) {
+                        CompletionItem ci = new CompletionItem(child, KIND_MODULE);
+                        ci.setInsertText(child);
+                        out.putIfAbsent(KIND_MODULE + ":" + child, ci);
+                    }
+                }
             }
         } else {
             // Bare identifier: visible scope symbols first, then hint roots, project roots,

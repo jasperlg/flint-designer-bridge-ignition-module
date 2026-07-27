@@ -1,5 +1,6 @@
 package dev.bwdesigngroup.flint.gateway.lsp;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -8,7 +9,9 @@ import dev.bwdesigngroup.flint.common.protocol.methods.lsp.Position;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -51,6 +54,32 @@ class CompletionEngineTest {
     private List<String> completeLabels(String src, int line, int ch) {
         CompletionEngine engine = new CompletionEngine(new FakeHints());
         return engine.complete(parse.parse("m.py", src).ast, src, new Position(line, ch)).stream()
+                .map(CompletionItem::getLabel)
+                .collect(Collectors.toList());
+    }
+
+    /** Project fixture mirroring a real script library: packages plus one leaf module with code. */
+    private static ProjectIndex projectIndex() {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("application/test", "def foo():\n    pass\n");
+        sources.put("application/refrigeration_service", "");
+        sources.put("application/sub/one", "");
+        sources.put("application/sub/two", "");
+        sources.put("app/main", "");
+        sources.put("a/b/c", "");
+        return new ProjectIndex(new FakeScriptStore("proj", sources));
+    }
+
+    private List<String> completeLabelsInProject(String src, int line, int ch) {
+        CompletionEngine engine = new CompletionEngine(new FakeHints());
+        return engine
+                .complete(
+                        parse.parse("m.py", src).ast,
+                        src,
+                        new Position(line, ch),
+                        projectIndex(),
+                        "proj")
+                .stream()
                 .map(CompletionItem::getLabel)
                 .collect(Collectors.toList());
     }
@@ -98,5 +127,73 @@ class CompletionEngineTest {
         String src = "def scale(value):\n    v\n";
         List<String> labels = completeLabels(src, 1, 5);
         assertTrue(labels.contains("value"), labels.toString());
+    }
+
+    @Test
+    void intermediatePackageCompletesToItsChildren() {
+        String src = "x = application.\n";
+        List<String> labels = completeLabelsInProject(src, 0, 16);
+        assertTrue(labels.contains("test"), labels.toString());
+        assertTrue(labels.contains("refrigeration_service"), labels.toString());
+    }
+
+    @Test
+    void intermediatePackageOffersOnlyImmediateChildren() {
+        String src = "x = a.\n";
+        List<String> labels = completeLabelsInProject(src, 0, 6);
+        assertTrue(labels.contains("b"), labels.toString());
+        assertFalse(labels.contains("b.c"), labels.toString());
+        assertFalse(labels.contains("c"), labels.toString());
+    }
+
+    @Test
+    void packageCompletionMatchesOnSegmentBoundaries() {
+        // "app." is its own package (app/main); it must not spill children of "application".
+        String src = "x = app.\n";
+        List<String> labels = completeLabelsInProject(src, 0, 8);
+        assertTrue(labels.contains("main"), labels.toString());
+        assertFalse(labels.contains("test"), labels.toString());
+    }
+
+    @Test
+    void childPackageWithSeveralModulesAppearsOnce() {
+        String src = "x = application.\n";
+        List<String> labels = completeLabelsInProject(src, 0, 16);
+        assertEquals(
+                1,
+                labels.stream().filter("sub"::equals).count(),
+                "'sub' should appear once: " + labels);
+    }
+
+    @Test
+    void packageCompletionRespectsPartial() {
+        String src = "x = application.te\n";
+        List<String> labels = completeLabelsInProject(src, 0, 18);
+        assertTrue(labels.contains("test"), labels.toString());
+        assertFalse(labels.contains("refrigeration_service"), labels.toString());
+    }
+
+    @Test
+    void leafModuleMemberCompletionStillWorks() {
+        String src = "x = application.test.\n";
+        List<String> labels = completeLabelsInProject(src, 0, 21);
+        assertTrue(labels.contains("foo"), labels.toString());
+    }
+
+    @Test
+    void systemHintsUnaffectedByProjectIndex() {
+        String src = "x = system.\n";
+        List<String> labels = completeLabelsInProject(src, 0, 11);
+        assertTrue(labels.contains("tag"), labels.toString());
+        assertTrue(labels.contains("date"), labels.toString());
+        assertTrue(labels.contains("perspective"), labels.toString());
+    }
+
+    @Test
+    void bareCompletionStillOffersProjectRoots() {
+        String src = "a\n";
+        List<String> labels = completeLabelsInProject(src, 0, 1);
+        assertTrue(labels.contains("application"), labels.toString());
+        assertFalse(labels.contains("test"), labels.toString());
     }
 }
