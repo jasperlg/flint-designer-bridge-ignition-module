@@ -134,25 +134,31 @@ public class FlintLanguageServer {
         return md == null ? null : new Hover(md, null);
     }
 
-    /** Go-to-definition: intra-file first, then cross-file into project scripts. */
+    /**
+     * Go-to-definition: intra-file first, then cross-file into project scripts.
+     *
+     * <p>{@code projectRootUri} is the URI of the project folder on disk, as resolved by {@link
+     * LspUris#projectRootUri} from the client's {@code initialize} — not the bare workspace root,
+     * which coincides with it only when the editor is opened on the project folder itself.
+     */
     public Location definition(
             String sessionId,
             String uri,
             String textIfAbsent,
             Position pos,
             String project,
-            String rootUri) {
+            String projectRootUri) {
         String text = resolveText(sessionId, uri, textIfAbsent);
         JythonParseService.ParseResult parse = getParse(sessionId, uri, text);
         Location intra = new SymbolResolver(parse.ast, text).definitionAt(uri, pos);
         if (intra != null) {
             return intra;
         }
-        return crossFileDefinition(text, pos, resolveProject(project), rootUri);
+        return crossFileDefinition(text, pos, resolveProject(project), projectRootUri);
     }
 
     private Location crossFileDefinition(
-            String text, Position pos, String project, String rootUri) {
+            String text, Position pos, String project, String projectRootUri) {
         if (projectIndex == null || project == null) {
             return null;
         }
@@ -164,7 +170,8 @@ public class FlintLanguageServer {
         ProjectIndex.Module direct = projectIndex.module(project, qualified);
         if (direct != null) {
             return new Location(
-                    LspUris.scriptUri(rootUri, project, direct.resourcePath), Range.of(0, 0, 0, 0));
+                    LspUris.scriptUri(projectRootUri, project, direct.resourcePath),
+                    Range.of(0, 0, 0, 0));
         }
         // module.symbol
         int lastDot = qualified.lastIndexOf('.');
@@ -175,13 +182,17 @@ public class FlintLanguageServer {
             return null;
         }
         DocumentSymbol match = findSymbol(module.symbols, symbol);
-        String targetUri = LspUris.scriptUri(rootUri, project, module.resourcePath);
+        String targetUri = LspUris.scriptUri(projectRootUri, project, module.resourcePath);
         Range range = match != null ? match.selectionRange : Range.of(0, 0, 0, 0);
         return new Location(targetUri, range);
     }
 
-    /** Workspace symbol search across all project scripts. */
-    public List<WorkspaceSymbol> workspaceSymbols(String project, String query, String rootUri) {
+    /**
+     * Workspace symbol search across all project scripts. {@code projectRootUri} carries the same
+     * meaning as in {@link #definition}.
+     */
+    public List<WorkspaceSymbol> workspaceSymbols(
+            String project, String query, String projectRootUri) {
         List<WorkspaceSymbol> out = new ArrayList<>();
         if (projectIndex == null) {
             return out;
@@ -192,7 +203,7 @@ public class FlintLanguageServer {
         }
         String q = query == null ? "" : query.toLowerCase();
         for (ProjectIndex.Module module : projectIndex.modules(resolved).values()) {
-            String uri = LspUris.scriptUri(rootUri, resolved, module.resourcePath);
+            String uri = LspUris.scriptUri(projectRootUri, resolved, module.resourcePath);
             collectWorkspaceSymbols(module.symbols, module.modulePath, uri, q, out);
         }
         return out;

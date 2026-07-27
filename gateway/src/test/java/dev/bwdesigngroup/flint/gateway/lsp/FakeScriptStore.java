@@ -14,18 +14,18 @@ import java.util.Map;
  * keyed by slashed resource path ({@code util/math}) with the module's source as the value. Read
  * only — the write methods are unused by the LSP tests.
  */
-class FakeScriptStore implements GatewayResourceStore {
+public class FakeScriptStore implements GatewayResourceStore {
 
     private final String project;
     private final Map<String, String> sources; // resource path -> code
 
-    FakeScriptStore(String project, Map<String, String> sources) {
+    public FakeScriptStore(String project, Map<String, String> sources) {
         this.project = project;
         this.sources = sources;
     }
 
     /** Store whose modules all have empty bodies — for package-shape tests. */
-    static FakeScriptStore ofPaths(String project, String... paths) {
+    public static FakeScriptStore ofPaths(String project, String... paths) {
         Map<String, String> sources = new LinkedHashMap<>();
         for (String path : paths) {
             sources.put(path, "");
