@@ -30,6 +30,46 @@ Flint Designer Bridge provides a WebSocket-based communication layer between VS 
 - **Gateway Jython language server** (v1.1.0+): full completion, hover, go-to-definition, references, symbols, and syntax diagnostics served from the Gateway (the Designer WebSocket LSP is completion-only)
 - **Native LSP over WebSocket** (v1.2.0+): the language server speaks the standard Language Server Protocol at `wss://<gateway>/system/flint-lsp`, so VS Code — or any LSP-capable editor — connects directly with a gateway API token
 
+### Client contract: declaring the project root
+
+Cross-file go-to-definition, references, and workspace symbol search return
+`file://` URIs under the project folder on disk, at
+`<projectRoot>/ignition/script-python/<resource path>/code.py`. The gateway
+cannot see the client's filesystem or its `project-paths` configuration, so the
+client must declare that folder in `initialize`:
+
+```json
+{
+  "rootUri": "file:///repo",
+  "initializationOptions": {
+    "project": "example-project",
+    "projectRoot": "projects/example-project"
+  }
+}
+```
+
+`projectRoot` accepts a URI, an absolute path, or a path relative to `rootUri`.
+Omit it and the gateway falls back to `rootUri`, which is correct only when the
+editor is opened on the project folder itself:
+
+```
+Editor opened on the project folder     Editor opened on the repo
+example-project/         ← rootUri      repo/                    ← rootUri
+└── ignition/                           └── projects/
+    └── script-python/                      └── example-project/ ← projectRoot
+        └── application/test/code.py            └── ignition/script-python/application/test/code.py
+```
+
+On the left, `rootUri` and the project folder coincide and the fallback works.
+On the right the workspace root is two segments short, and without `projectRoot`
+the returned URIs point at files that do not exist. What matters is how deeply
+the project is nested below the workspace root, not how many projects the
+workspace holds — the right-hand layout has exactly one.
+
+One `projectRoot` applies per LSP session, alongside the single `project` it
+accompanies. Clients on the `POST /data/flint/rpc` transport pass the same value
+as a `projectRoot` param on `lsp.definition` and `lsp.workspaceSymbol`.
+
 ## Requirements
 
 - Ignition **8.1.44+** (install the `-8.1` artifact) or **8.3.1+** (install the `-8.3` artifact)

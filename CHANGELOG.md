@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Go-to-definition, cross-file references, and workspace symbol search returned
+  URIs anchored at the editor's workspace root, which resolves only when the
+  editor is opened on the project folder itself. When it is opened on an
+  ancestor — a repo holding the project at
+  `<workspaceRoot>/projects/<projectName>/` — the returned paths were missing
+  that prefix, did not exist, and navigation silently failed.
+
+### Added
+- Clients may declare the project's on-disk folder via
+  `initializationOptions.projectRoot` at `initialize` (or a `projectRoot` param
+  on `lsp.definition` / `lsp.workspaceSymbol` over HTTP); it accepts a URI, an
+  absolute path, or a path relative to `rootUri`. Requires a matching client
+  change — clients that omit it keep the previous `rootUri`-based behavior.
+
 ## [1.2.0] - 2026-07-10
 
 ### Added
