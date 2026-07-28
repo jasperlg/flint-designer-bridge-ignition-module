@@ -12,6 +12,7 @@ import dev.bwdesigngroup.flint.common.protocol.methods.lsp.Location;
 import dev.bwdesigngroup.flint.common.protocol.methods.lsp.LspDiagnostic;
 import dev.bwdesigngroup.flint.common.protocol.methods.lsp.Position;
 import dev.bwdesigngroup.flint.gateway.lsp.FlintLanguageServer;
+import dev.bwdesigngroup.flint.gateway.lsp.LspUris;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +75,9 @@ public final class LspMessageRouter {
     private volatile boolean initialized;
     private volatile String project;
     private volatile String rootUri;
+
+    /** Project folder on disk, resolved once at initialize; see {@link LspUris#projectRootUri}. */
+    private volatile String projectRootUri;
 
     public LspMessageRouter(
             FlintLanguageServer engine,
@@ -182,9 +186,11 @@ public final class LspMessageRouter {
     // ==================== Lifecycle ====================
 
     private void handleInitialize(JsonElement id, JsonObject params) {
+        String declaredProjectRoot = null;
         JsonObject options = childObject(params, "initializationOptions");
         if (options != null) {
             project = asString(options.get("project"));
+            declaredProjectRoot = asString(options.get("projectRoot"));
         }
         rootUri = asString(params.get("rootUri"));
         if (rootUri == null
@@ -196,6 +202,7 @@ public final class LspMessageRouter {
                 rootUri = asString(first.getAsJsonObject().get("uri"));
             }
         }
+        projectRootUri = LspUris.projectRootUri(declaredProjectRoot, rootUri);
         initialized = true;
         respond(id, buildInitializeResult());
     }
@@ -321,7 +328,7 @@ public final class LspMessageRouter {
             respond(id, null);
             return;
         }
-        Location loc = engine.definition(sessionId, uri, null, pos, project, rootUri);
+        Location loc = engine.definition(sessionId, uri, null, pos, project, projectRootUri);
         if (loc == null || loc.uri == null || loc.uri.isEmpty()) {
             respond(id, null);
             return;
@@ -355,7 +362,7 @@ public final class LspMessageRouter {
 
     private void handleWorkspaceSymbol(JsonElement id, JsonObject params) {
         String query = asString(params.get("query"));
-        respond(id, engine.workspaceSymbols(project, query, rootUri));
+        respond(id, engine.workspaceSymbols(project, query, projectRootUri));
     }
 
     // ==================== Diagnostics ====================

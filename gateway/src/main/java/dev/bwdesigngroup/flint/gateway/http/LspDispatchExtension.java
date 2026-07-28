@@ -11,6 +11,7 @@ import dev.bwdesigngroup.flint.common.protocol.methods.lsp.Hover;
 import dev.bwdesigngroup.flint.common.protocol.methods.lsp.Location;
 import dev.bwdesigngroup.flint.common.protocol.methods.lsp.Position;
 import dev.bwdesigngroup.flint.gateway.lsp.FlintLanguageServer;
+import dev.bwdesigngroup.flint.gateway.lsp.LspUris;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -106,7 +107,8 @@ public class LspDispatchExtension implements GatewayRpcDispatcher.DispatchExtens
                                     str(params, "text"),
                                     pos,
                                     str(params, "project"),
-                                    str(params, "rootUri"));
+                                    LspUris.projectRootUri(
+                                            str(params, "projectRoot"), str(params, "rootUri")));
                     return JsonRpcResponse.success(loc, id); // null => no definition
                 }
             case FlintConstants.METHOD_LSP_REFERENCES:
@@ -153,7 +155,8 @@ public class LspDispatchExtension implements GatewayRpcDispatcher.DispatchExtens
                             server.workspaceSymbols(
                                     str(params, "project"),
                                     str(params, "query"),
-                                    str(params, "rootUri")));
+                                    LspUris.projectRootUri(
+                                            str(params, "projectRoot"), str(params, "rootUri"))));
                     return JsonRpcResponse.success(result, id);
                 }
             case FlintConstants.METHOD_LSP_REINDEX:

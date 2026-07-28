@@ -118,4 +118,33 @@ class ProjectIndexTest {
                                 s -> "add".equals(s.name) && s.location.uri.contains("util/math")),
                 syms.stream().map(s -> s.name).collect(Collectors.toList()).toString());
     }
+
+    /**
+     * Both routes build URIs under the project folder the client declared, not the workspace root —
+     * the repo layout nests the project under a {@code project-paths} entry.
+     */
+    @Test
+    void crossFileDefinitionUsesDeclaredProjectRoot() {
+        String projectRoot = LspUris.projectRootUri("projects/proj", "file:///ws");
+        String text = "import util.math\nx = util.math.add(1, 2)\n";
+        Location def =
+                server().definition(
+                                "s", "app/main", text, new Position(1, 15), "proj", projectRoot);
+        assertNotNull(def);
+        assertEquals("file:///ws/projects/proj/ignition/script-python/util/math/code.py", def.uri);
+    }
+
+    @Test
+    void workspaceSymbolsUseDeclaredProjectRoot() {
+        String projectRoot = LspUris.projectRootUri("projects/proj", "file:///ws");
+        List<WorkspaceSymbol> syms = server().workspaceSymbols("proj", "add", projectRoot);
+        assertTrue(
+                syms.stream()
+                        .anyMatch(
+                                s ->
+                                        "add".equals(s.name)
+                                                && s.location.uri.startsWith(
+                                                        "file:///ws/projects/proj/ignition/")),
+                syms.stream().map(s -> s.location.uri).collect(Collectors.toList()).toString());
+    }
 }

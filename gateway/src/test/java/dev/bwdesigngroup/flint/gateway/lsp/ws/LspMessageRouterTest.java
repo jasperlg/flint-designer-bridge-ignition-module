@@ -7,9 +7,12 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.bwdesigngroup.flint.common.protocol.methods.lsp.CompletionItem;
+import dev.bwdesigngroup.flint.gateway.lsp.FakeScriptStore;
 import dev.bwdesigngroup.flint.gateway.lsp.FlintLanguageServer;
 import dev.bwdesigngroup.flint.gateway.lsp.HintsSource;
+import dev.bwdesigngroup.flint.gateway.lsp.ProjectIndex;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -189,6 +192,44 @@ class LspMessageRouterTest {
         router.handle(initialize());
         router.handle(request(7, "textDocument/foldingRange", "{}"));
         assertEquals(-32601, responseFor(7).getAsJsonObject("error").get("code").getAsInt());
+    }
+
+    @Test
+    @DisplayName("initializationOptions.projectRoot anchors returned URIs, not the workspace root")
+    void projectRootFromInitializationOptions() {
+        LspMessageRouter indexed =
+                new LspMessageRouter(
+                        new FlintLanguageServer(
+                                FAKE_HINTS,
+                                new ProjectIndex(
+                                        new FakeScriptStore(
+                                                "proj",
+                                                Map.of(
+                                                        "util/math",
+                                                        "def add(a, b):\n    return a + b\n")))),
+                        "ws-test",
+                        GSON,
+                        scheduler,
+                        "9.9.9",
+                        transport);
+        indexed.handle(
+                request(
+                        1,
+                        "initialize",
+                        "{\"rootUri\":\"file:///ws\",\"initializationOptions\":"
+                                + "{\"project\":\"proj\",\"projectRoot\":\"projects/proj\"}}"));
+        indexed.handle(request(2, "workspace/symbol", "{\"query\":\"\"}"));
+
+        JsonArray symbols = responseFor(2).getAsJsonArray("result");
+        assertTrue(symbols.size() > 0, "expected workspace symbols");
+        String uri =
+                symbols.get(0)
+                        .getAsJsonObject()
+                        .getAsJsonObject("location")
+                        .get("uri")
+                        .getAsString();
+        assertEquals("file:///ws/projects/proj/ignition/script-python/util/math/code.py", uri);
+        indexed.dispose();
     }
 
     // ==================== helpers ====================
